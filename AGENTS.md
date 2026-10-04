@@ -33,6 +33,47 @@ All source code, comments, docstrings, documentation, commit messages, task desc
 - Custom Djinni adapter
 - Heroku deployment
 
+## Modular Development Principles
+
+The product must be developed as a sequence of small, atomic, independently verifiable feature increments.
+
+A feature increment should:
+
+- have one clear responsibility;
+- touch the smallest reasonable set of modules;
+- have explicit acceptance criteria;
+- include focused unit tests;
+- add integration tests only where a module boundary or external dependency requires them;
+- be independently reviewable;
+- avoid unrelated refactors;
+- avoid speculative abstractions;
+- leave the repository in a runnable state.
+
+Prefer vertical slices when practical: a small feature should travel through the necessary boundaries end-to-end rather than building large incomplete layers in advance.
+
+Separate stable domain logic from infrastructure adapters so bugs can be reproduced and tested without calling external services.
+
+When a change is too large to review or verify confidently, the Supervisor must split it into smaller increments before assigning it.
+
+Do not combine a feature implementation, unrelated refactor, dependency migration, and architectural cleanup in the same increment unless the dependency is necessary for the feature.
+
+## Bug Isolation Principles
+
+Design modules so failures can be localized.
+
+Examples:
+
+- ATS transport failures should be testable without the ranking system.
+- Parsing failures should be testable without PostgreSQL.
+- Ranking rules should be testable using fixture jobs without network access.
+- Database repositories should be testable independently from the web UI.
+- UI behavior should not require live ATS services.
+- External integrations should be wrapped behind narrow interfaces.
+
+Prefer deterministic fixtures and contract tests for provider integrations.
+
+When a bug is found, reproduce it with the smallest possible test case before changing unrelated code.
+
 ## Autonomous Development Model
 
 This repository is developed by an external autonomous runtime.
@@ -42,12 +83,13 @@ This repository is developed by an external autonomous runtime.
 The Supervisor:
 
 - reads the approved project scope;
-- defines the next implementation task;
+- defines the next atomic implementation task;
 - provides explicit instructions to the Executor;
 - evaluates the Executor's changes;
 - inspects test and validation results;
 - decides whether the work is accepted, requires revision, or is blocked;
-- must not modify project source code directly.
+- must not modify project source code directly;
+- must reject unrelated changes or scope creep.
 
 ### Executor
 
@@ -55,10 +97,10 @@ The Executor:
 
 - receives instructions from the Supervisor;
 - inspects the repository;
-- implements the requested work;
+- implements only the requested atomic task;
 - runs tests and validation;
 - may modify source code and project files;
-- reports completion and encountered blockers to the runtime.
+- reports completion, changed files, tests, and blockers to the runtime.
 
 The Supervisor and Executor must use independent conversation contexts.
 
@@ -79,17 +121,39 @@ The Supervisor may decompose the scope into implementation tasks, but may not ch
 The expected loop is:
 
 1. Read the project scope and current repository state.
-2. Supervisor selects the next task.
+2. Supervisor identifies the smallest coherent next task.
 3. Executor implements that task.
 4. Runtime runs deterministic validation and captures the diff.
-5. Supervisor reviews the implementation and validation results.
-6. If rejected, Supervisor gives concrete revision instructions.
+5. Supervisor reviews the implementation, tests, and scope compliance.
+6. If rejected, Supervisor gives concrete revision instructions limited to the task.
 7. Executor revises the implementation.
 8. Repeat until the Supervisor accepts the task.
-9. Runtime checkpoints the accepted work and proceeds to the next task.
-10. Stop only when the scope is complete or the Supervisor reports a blocking issue.
+9. Runtime checkpoints the accepted work.
+10. Supervisor selects the next atomic task.
+11. Continue until the scope is complete or the Supervisor reports a blocking issue.
 
 The loop must have configurable iteration limits and must stop safely when limits are exceeded.
+
+## Task Sizing Rules
+
+The Supervisor should prefer tasks that can normally be completed and validated in one focused iteration.
+
+Examples of good atomic tasks:
+
+- add one domain value object;
+- add one repository method plus tests;
+- add one database table and migration;
+- add one ATS adapter contract test;
+- add one scoring rule group;
+- add one UI endpoint and template.
+
+Examples of tasks that should normally be split:
+
+- implement the entire persistence layer;
+- implement all ATS integrations;
+- implement the complete web UI;
+- refactor the entire codebase;
+- add several unrelated features at once.
 
 ## Git Workflow
 
@@ -99,6 +163,7 @@ The loop must have configurable iteration limits and must stop safely when limit
 - The runtime controls commits and branch checkpoints.
 - The Executor should not merge branches or rewrite history.
 - Pushes to the remote repository must be explicitly enabled in the runtime configuration.
+- Prefer one logical checkpoint per accepted atomic increment.
 
 ## Data Safety
 
