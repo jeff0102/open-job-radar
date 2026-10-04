@@ -48,6 +48,26 @@ The Supervisor may decompose this scope into implementation tasks but may not ch
 
 The initial application should remain a modular monolith.
 
+Modules should have narrow responsibilities and explicit boundaries.
+
+Preferred dependency direction:
+
+```
+Web/UI
+  ↓
+Application services
+  ↓
+Domain logic
+  ↓
+Repository interfaces
+  ↓
+Infrastructure implementations
+```
+
+External integrations should be isolated behind adapters.
+
+The domain layer must not depend directly on HTTP clients, provider-specific payloads, or template rendering.
+
 Core areas:
 
 - source tenants
@@ -59,6 +79,59 @@ Core areas:
 - web interface
 
 ats-scrapers is the upstream ingestion layer for supported ATS providers.
+
+## Atomic Feature Strategy
+
+The complete product must be built incrementally.
+
+Each milestone is a roadmap boundary, not a single implementation task.
+
+The Supervisor must decompose each milestone into the smallest coherent feature increments that can be implemented and verified independently.
+
+Each accepted increment should leave the application in a valid, runnable state.
+
+A typical increment should follow:
+
+```
+Task
+  ↓
+Implementation
+  ↓
+Focused tests
+  ↓
+Deterministic validation
+  ↓
+Supervisor review
+  ↓
+Checkpoint
+```
+
+Avoid large "big bang" milestones.
+
+Example decomposition for persistence:
+
+1. database configuration;
+2. database connection;
+3. one model;
+4. one migration;
+5. one repository operation;
+6. repository tests;
+7. next model;
+8. integration between the models.
+
+Example decomposition for ingestion:
+
+1. source-tenant contract;
+2. one ATS adapter integration;
+3. raw Job mapping;
+4. persistence of one fetched job;
+5. idempotent upsert;
+6. sync-run recording;
+7. error handling;
+8. second ATS;
+9. cross-ATS deduplication.
+
+The exact decomposition is determined by the Supervisor after inspecting the current repository.
 
 ## Candidate Matching
 
@@ -83,6 +156,28 @@ Hard rejection rules must remain separate from positive scoring rules.
 Tracked jobs must survive upstream disappearance when they are referenced by application history or other user tracking data.
 
 Provider-specific information may be preserved as structured JSON when it does not fit the canonical job fields.
+
+## Testing Strategy
+
+Testing should be layered:
+
+### Unit Tests
+
+Pure domain logic, parsers, scoring rules, transformations, and validation.
+
+### Contract / Adapter Tests
+
+Provider integrations and adapter behavior using deterministic fixtures or mocked responses.
+
+### Integration Tests
+
+Database and application-service interactions that cross module boundaries.
+
+### End-to-End Tests
+
+Only for critical user flows and after the underlying modules are stable.
+
+External APIs must not be required for the normal test suite.
 
 ## Milestones
 
@@ -133,4 +228,6 @@ The project is complete only when:
 
 ## Human Approval Boundary
 
-Changes to product goals, architecture boundaries, planned technology, security model, or scope require explicit human approval before implementation.
+Changes to product goals, architecture boundaries, planned technology, security model, or scope require explicit human approval.
+
+The Supervisor may optimize task decomposition and implementation order, but may not change this product contract without human approval.
