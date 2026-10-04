@@ -8,13 +8,11 @@ The project aggregates jobs from ATS platforms and remote job sources, ranks the
 
 ## Language
 
-All source code, comments, docstrings, documentation, commit messages, issue text, database identifiers, API fields, and UI copy must be written in English.
+All source code, comments, docstrings, documentation, commit messages, task descriptions, database identifiers, API fields, and UI copy must be written in English.
 
 ## Engineering Principles
 
 - Prefer simple, maintainable solutions over premature abstraction.
-- Do not introduce microservices, Redis, Celery, Elasticsearch, React, Kubernetes, or an LLM-based ranking pipeline unless the project plan explicitly requires them.
-- Keep the application small enough to run comfortably as a personal project.
 - Reuse `ats-scrapers` instead of reimplementing ATS adapters.
 - Do not modify the `ats-scrapers` dependency directly unless a concrete integration bug requires it.
 - Keep provider-specific ingestion code isolated from domain logic.
@@ -22,10 +20,9 @@ All source code, comments, docstrings, documentation, commit messages, issue tex
 - Preserve user tracking data when a source job disappears.
 - Prefer deterministic rules before introducing probabilistic or LLM-based classification.
 - Add tests for non-trivial business logic.
+- Do not introduce microservices, Redis, Celery, Elasticsearch, React, Kubernetes, or an LLM-based ranking pipeline unless the approved project scope explicitly requires them.
 
-## Current Architecture
-
-Planned stack:
+## Planned Stack
 
 - FastAPI
 - Jinja2 + HTMX
@@ -36,41 +33,72 @@ Planned stack:
 - Custom Djinni adapter
 - Heroku deployment
 
-Core domain areas:
+## Autonomous Development Model
 
-- source tenants
-- jobs
-- job analysis / ranking
-- job tracking
-- sync runs
+This repository is developed by an external autonomous runtime.
 
-## Source Integration
+### Supervisor
 
-`ats-scrapers` returns normalized `Job` objects. Treat its model as the upstream ingestion contract.
+The Supervisor:
 
-Do not create a second ATS-specific normalized schema unless there is a demonstrated need.
+- reads the approved project scope;
+- defines the next implementation task;
+- provides explicit instructions to the Executor;
+- evaluates the Executor's changes;
+- inspects test and validation results;
+- decides whether the work is accepted, requires revision, or is blocked;
+- must not modify project source code directly.
 
-The application should maintain its own source-tenant record because `Job.company` is not guaranteed to be a canonical company identity across providers.
+### Executor
 
-## Filtering and Ranking
+The Executor:
 
-Hard rejection rules and positive ranking signals must remain separate.
+- receives instructions from the Supervisor;
+- inspects the repository;
+- implements the requested work;
+- runs tests and validation;
+- may modify source code and project files;
+- reports completion and encountered blockers to the runtime.
 
-Unknown remote geography must not be treated as globally remote.
+The Supervisor and Executor must use independent conversation contexts.
 
-The system must distinguish at least:
+The Executor must not redefine requirements or expand scope on its own.
 
-- unknown remote scope
-- Brazil
-- LATAM
-- Americas
-- worldwide
-- US-only
-- EU-only
-- onsite
-- hybrid
+The Supervisor must not silently expand the approved scope.
 
-Keep ranking rules versioned so historical analysis can be recomputed without refetching jobs.
+## Scope Contract
+
+The authoritative development requirements live in `SCOPE.md`.
+
+The runtime should treat `SCOPE.md` as the source of truth for product goals, architecture, constraints, milestones, and acceptance criteria.
+
+The Supervisor may decompose the scope into implementation tasks, but may not change the product requirements without explicit human approval.
+
+## Autonomous Loop
+
+The expected loop is:
+
+1. Read the project scope and current repository state.
+2. Supervisor selects the next task.
+3. Executor implements that task.
+4. Runtime runs deterministic validation and captures the diff.
+5. Supervisor reviews the implementation and validation results.
+6. If rejected, Supervisor gives concrete revision instructions.
+7. Executor revises the implementation.
+8. Repeat until the Supervisor accepts the task.
+9. Runtime checkpoints the accepted work and proceeds to the next task.
+10. Stop only when the scope is complete or the Supervisor reports a blocking issue.
+
+The loop must have configurable iteration limits and must stop safely when limits are exceeded.
+
+## Git Workflow
+
+- Work on an isolated branch created by the runtime.
+- Do not rewrite public history.
+- Do not force-push.
+- The runtime controls commits and branch checkpoints.
+- The Executor should not merge branches or rewrite history.
+- Pushes to the remote repository must be explicitly enabled in the runtime configuration.
 
 ## Data Safety
 
@@ -79,44 +107,8 @@ Keep ranking rules versioned so historical analysis can be recomputed without re
 - Do not delete tracked jobs merely because an upstream source no longer returns them.
 - Preserve the original application URL whenever available.
 
-## Development Workflow
-
-Before implementing a new feature:
-
-1. Inspect the existing code and related tests.
-2. Check the project plan and repository issues.
-3. Make the smallest coherent change.
-4. Add or update tests.
-5. Run the relevant test suite.
-6. Summarize changes, validation, and any unresolved risks.
-
-An agent must not make broad architectural changes based only on a single task description.
-
-## Git Workflow
-
-Use small, descriptive commits.
-
-Do not rewrite public history.
-
-Do not force-push.
-
-Prefer working on a dedicated branch for each task.
-
-Do not merge pull requests unless explicitly instructed.
-
-## Autonomous Operation
-
-The runtime repository may execute coding agents against this repository.
-
-When an agent is operating autonomously:
-
-- It may inspect, implement, test, and commit changes.
-- It should work from explicit GitHub issues or task instructions.
-- It should stop rather than inventing requirements when a task conflicts with the architecture contract.
-- It should leave a concise completion summary suitable for a pull request description.
-
 ## Current Project Status
 
-The repository is in the bootstrap phase.
+The repository is in the planning/bootstrap phase.
 
-Do not begin implementing the complete application until the project plan has been recorded and the repository bootstrap has been validated.
+The autonomous runtime must not implement the full product until `SCOPE.md` has been written and accepted by the human owner.
