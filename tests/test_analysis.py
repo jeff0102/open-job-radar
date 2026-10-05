@@ -2,7 +2,12 @@ from uuid import uuid4
 
 import pytest
 
-from open_job_radar.analysis import RemoteScope, classify_remote_scope
+from open_job_radar.analysis import (
+    CandidateProfile,
+    RemoteScope,
+    classify_remote_scope,
+    evaluate_hard_filters,
+)
 from open_job_radar.ingestion import CanonicalJob
 
 
@@ -77,3 +82,58 @@ def test_specific_geographic_signals_precede_broader_signals() -> None:
 )
 def test_ambiguous_remote_wording_is_unknown(description: str) -> None:
     assert classify_remote_scope(job(location="Remote", is_remote=True, description=description)) is RemoteScope.UNKNOWN
+
+
+def test_hard_filter_accepts_matching_geography_and_authorization() -> None:
+    result = evaluate_hard_filters(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"})),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert result.passed is True
+    assert result.remote_scope is RemoteScope.BRAZIL
+    assert "accepted" in result.reason
+
+
+def test_hard_filter_rejects_incompatible_geography() -> None:
+    result = evaluate_hard_filters(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"})),
+        job(location="Remote - US", is_remote=True),
+    )
+
+    assert result.passed is False
+    assert result.remote_scope is RemoteScope.US_ONLY
+    assert "incompatible" in result.reason
+
+
+def test_hard_filter_rejects_missing_authorization() -> None:
+    result = evaluate_hard_filters(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"EU"})),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert result.passed is False
+    assert "authorization" in result.reason
+
+
+def test_hard_filter_rejects_unknown_scope_instead_of_assuming_worldwide() -> None:
+    result = evaluate_hard_filters(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"worldwide"})),
+        job(location="Remote", is_remote=True),
+    )
+
+    assert result.passed is False
+    assert result.remote_scope is RemoteScope.UNKNOWN
+    assert "unknown" in result.reason
+    assert "insufficient" in result.reason
+
+
+def test_hard_filter_rejects_onsite_job_for_remote_only_candidate() -> None:
+    result = evaluate_hard_filters(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"})),
+        job(location="Sao Paulo", is_remote=False),
+    )
+
+    assert result.passed is False
+    assert result.remote_scope is RemoteScope.ONSITE
+    assert "requires remote work" in result.reason

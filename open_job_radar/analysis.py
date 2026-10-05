@@ -1,5 +1,6 @@
 """Deterministic candidate-analysis primitives."""
 
+from dataclasses import dataclass, field
 from enum import Enum
 import re
 import unicodedata
@@ -18,6 +19,29 @@ class RemoteScope(str, Enum):
     EU_ONLY = "eu-only"
     ONSITE = "onsite"
     HYBRID = "hybrid"
+
+
+@dataclass(frozen=True)
+class CandidateProfile:
+    """Candidate constraints used by deterministic hard filters."""
+
+    country: str | None = None
+    authorized_regions: frozenset[str | RemoteScope] = field(default_factory=frozenset)
+    remote_only: bool = True
+
+    def __post_init__(self) -> None:
+        if self.country is not None and not self.country.strip():
+            raise ValueError("country must not be blank")
+        object.__setattr__(self, "authorized_regions", frozenset(self.authorized_regions))
+
+
+@dataclass(frozen=True)
+class HardFilterResult:
+    """Explainable outcome of applying candidate hard constraints to a job."""
+
+    passed: bool
+    reason: str
+    remote_scope: RemoteScope
 
 
 class _CanonicalJobFields(Protocol):
@@ -76,6 +100,65 @@ _WORLDWIDE_PATTERNS = (
     r"\blocation independent\b",
 )
 
+_LATAM_COUNTRIES = {
+    "argentina",
+    "bolivia",
+    "brazil",
+    "brasil",
+    "chile",
+    "colombia",
+    "costa rica",
+    "cuba",
+    "dominican republic",
+    "ecuador",
+    "el salvador",
+    "guatemala",
+    "honduras",
+    "mexico",
+    "nicaragua",
+    "panama",
+    "paraguay",
+    "peru",
+    "puerto rico",
+    "uruguay",
+    "venezuela",
+}
+_AMERICAS_COUNTRIES = _LATAM_COUNTRIES | {
+    "canada",
+    "united states",
+    "usa",
+    "us",
+}
+_EU_COUNTRIES = {
+    "austria",
+    "belgium",
+    "bulgaria",
+    "croatia",
+    "cyprus",
+    "czech republic",
+    "denmark",
+    "estonia",
+    "finland",
+    "france",
+    "germany",
+    "greece",
+    "hungary",
+    "ireland",
+    "italy",
+    "latvia",
+    "lithuania",
+    "luxembourg",
+    "malta",
+    "netherlands",
+    "poland",
+    "portugal",
+    "romania",
+    "slovakia",
+    "slovenia",
+    "spain",
+    "sweden",
+}
+
 
 def classify_remote_scope(job: _CanonicalJobFields) -> RemoteScope:
     """Classify a canonical job's workplace and geographic scope.
@@ -98,6 +181,103 @@ def classify_remote_scope(job: _CanonicalJobFields) -> RemoteScope:
     if _matches_any(text, _WORLDWIDE_PATTERNS):
         return RemoteScope.WORLDWIDE
     return RemoteScope.UNKNOWN
+
+
+def evaluate_hard_filters(candidate: CandidateProfile, job: _CanonicalJobFields) -> HardFilterResult:
+    """Apply non-negotiable candidate constraints without positive scoring."""
+
+    remote_scope = classify_remote_scope(job)
+    if remote_scope is RemoteScope.UNKNOWN:
+        return HardFilterResult(
+            passed=False,
+            reason="rejected: remote scope is unknown; geographic eligibility is insufficient",
+            remote_scope=remote_scope,
+        )
+
+    if candidate.remote_only and remote_scope in {RemoteScope.ONSITE, RemoteScope.HYBRID}:
+        return HardFilterResult(
+            passed=False,
+            reason="rejected: job is not fully remote and candidate requires remote work",
+            remote_scope=remote_scope,
+        )
+
+    if remote_scope in {RemoteScope.ONSITE, RemoteScope.HYBRID}:
+        return HardFilterResult(
+            passed=True,
+            reason=f"accepted: candidate permits {remote_scope.value} work",
+            remote_scope=remote_scope,
+        )
+
+    if not _geography_matches(candidate, remote_scope):
+        country = candidate.country or "unknown candidate country"
+        return HardFilterResult(
+            passed=False,
+            reason=(
+                f"rejected: job scope {remote_scope.value} is incompatible with candidate country {country}"
+            ),
+            remote_scope=remote_scope,
+        )
+
+    if not _authorization_covers(candidate, remote_scope):
+        return HardFilterResult(
+            passed=False,
+            reason=(
+                f"rejected: candidate has no explicit work authorization for {remote_scope.value}"
+            ),
+            remote_scope=remote_scope,
+        )
+
+    return HardFilterResult(
+        passed=True,
+        reason=f"accepted: candidate geography and authorization match {remote_scope.value}",
+        remote_scope=remote_scope,
+    )
+
+
+def _geography_matches(candidate: CandidateProfile, remote_scope: RemoteScope) -> bool:
+    if remote_scope is RemoteScope.WORLDWIDE:
+        return True
+    if candidate.country is None:
+        return False
+
+    country = _normalize_text(candidate.country)
+    if remote_scope is RemoteScope.BRAZIL:
+        return country in {"brazil", "brasil"}
+    if remote_scope is RemoteScope.LATAM:
+        return country in _LATAM_COUNTRIES
+    if remote_scope is RemoteScope.AMERICAS:
+        return country in _AMERICAS_COUNTRIES
+    if remote_scope is RemoteScope.US_ONLY:
+        return country in {"united states", "usa", "us"}
+    if remote_scope is RemoteScope.EU_ONLY:
+        return country in _EU_COUNTRIES
+    return False
+
+
+def _authorization_covers(candidate: CandidateProfile, remote_scope: RemoteScope) -> bool:
+    authorizations = {
+        _normalize_text(region.value if isinstance(region, RemoteScope) else region)
+        for region in candidate.authorized_regions
+    }
+    if {"worldwide", "anywhere", "global"} & authorizations:
+        return True
+
+    if candidate.country is not None:
+        country = _normalize_text(candidate.country)
+        if country in authorizations:
+            return True
+        if remote_scope is RemoteScope.LATAM and country in authorizations:
+            return True
+
+    region_names = {
+        RemoteScope.BRAZIL: {"brazil", "brasil"},
+        RemoteScope.LATAM: {"latam", "latin america"},
+        RemoteScope.AMERICAS: {"americas", "north america"},
+        RemoteScope.US_ONLY: {"us", "usa", "united states", "us only"},
+        RemoteScope.EU_ONLY: {"eu", "europe", "european union", "eu only"},
+        RemoteScope.WORLDWIDE: set(),
+    }
+    return bool(region_names.get(remote_scope, set()) & authorizations)
 
 
 def _job_text(job: _CanonicalJobFields) -> str:
@@ -135,4 +315,10 @@ def _classify_geography(text: str, location: str) -> RemoteScope | None:
     return None
 
 
-__all__ = ["RemoteScope", "classify_remote_scope"]
+__all__ = [
+    "CandidateProfile",
+    "HardFilterResult",
+    "RemoteScope",
+    "classify_remote_scope",
+    "evaluate_hard_filters",
+]
