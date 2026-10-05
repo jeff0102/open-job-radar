@@ -29,6 +29,7 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
             "alembic_version",
             "jobs",
             "source_tenants",
+            "sync_runs",
         ]
         source_tenant_columns = {
             column["name"]
@@ -65,6 +66,26 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
             "created_at",
             "updated_at",
         }
+        sync_run_columns = {
+            column["name"]: column
+            for column in inspector.get_columns("sync_runs")
+        }
+        assert set(sync_run_columns) == {
+            "id",
+            "source_tenant_id",
+            "status",
+            "started_at",
+            "completed_at",
+            "message",
+        }
+        assert sync_run_columns["completed_at"]["nullable"] is True
+        assert sync_run_columns["message"]["nullable"] is True
+        assert inspector.get_pk_constraint("sync_runs")["constrained_columns"] == [
+            "id"
+        ]
+        assert inspector.get_foreign_keys("sync_runs")[0]["referred_table"] == (
+            "source_tenants"
+        )
         assert inspector.get_pk_constraint("jobs")["constrained_columns"] == ["id"]
         assert inspector.get_foreign_keys("jobs")[0]["referred_table"] == "source_tenants"
     finally:

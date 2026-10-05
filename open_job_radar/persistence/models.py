@@ -35,6 +35,7 @@ class SourceTenant(Base):
         DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
     )
     jobs: Mapped[list["Job"]] = relationship(back_populates="source_tenant")
+    sync_runs: Mapped[list["SyncRun"]] = relationship(back_populates="source_tenant")
 
 
 class Job(Base):
@@ -65,3 +66,23 @@ class Job(Base):
         DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
     )
     source_tenant: Mapped[SourceTenant] = relationship(back_populates="jobs")
+
+
+class SyncRun(Base):
+    """A lifecycle record for one source-tenant synchronization."""
+
+    __tablename__ = "sync_runs"
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    source_tenant_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("source_tenants.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_tenant: Mapped[SourceTenant] = relationship(back_populates="sync_runs")
