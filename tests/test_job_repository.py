@@ -1,11 +1,12 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 
 from open_job_radar.ingestion import CanonicalJob
 from open_job_radar.persistence import (
     Base,
+    Job,
     JobRepository,
     SourceTenant,
     create_session_factory,
@@ -61,6 +62,76 @@ def test_job_repository_persists_and_retrieves_canonical_job() -> None:
             assert result.is_remote is True
             assert result.description == canonical_job.description
             assert result.provider_data == canonical_job.provider_data
+    finally:
+        engine.dispose()
+
+
+def test_job_repository_upsert_is_idempotent_and_refreshes_source_fields() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    session_factory = create_session_factory(engine)
+    source_tenant_id = uuid4()
+    initial_job = CanonicalJob(
+        source_tenant_id=source_tenant_id,
+        provider="greenhouse",
+        provider_job_id="12345",
+        original_url="https://boards.greenhouse.io/acme/jobs/12345",
+        application_url="https://acme.example/apply/12345",
+        title="Senior Python Engineer",
+        company="Acme",
+        location="Remote - Americas",
+        is_remote=True,
+        description="Build reliable services.",
+        provider_data={"requisition_id": "REQ-123"},
+    )
+    updated_job = CanonicalJob(
+        source_tenant_id=source_tenant_id,
+        provider="greenhouse",
+        provider_job_id="12345",
+        original_url="https://boards.greenhouse.io/acme/jobs/12345?updated=true",
+        application_url="https://acme.example/apply/updated-12345",
+        title="Staff Python Engineer",
+        company="Acme Technologies",
+        location="Remote - Americas and Europe",
+        is_remote=False,
+        description="Build and lead reliable services.",
+        provider_data={"requisition_id": "REQ-456"},
+    )
+
+    try:
+        with session_factory() as session:
+            session.add(
+                SourceTenant(
+                    id=source_tenant_id,
+                    provider="greenhouse",
+                    name="Acme Careers",
+                )
+            )
+            session.commit()
+
+            repository = JobRepository(session)
+            first = repository.upsert(initial_job)
+            first_id = first.id
+            assert session.scalar(select(func.count()).select_from(Job)) == 1
+
+            repeated = repository.upsert(initial_job)
+            assert repeated.id == first_id
+            assert session.scalar(select(func.count()).select_from(Job)) == 1
+
+            refreshed = repository.upsert(updated_job)
+            assert refreshed.id == first_id
+            assert refreshed.source_tenant_id == source_tenant_id
+            assert refreshed.provider == "greenhouse"
+            assert refreshed.provider_job_id == "12345"
+            assert refreshed.original_url == updated_job.original_url
+            assert refreshed.application_url == updated_job.application_url
+            assert refreshed.title == updated_job.title
+            assert refreshed.company == updated_job.company
+            assert refreshed.location == updated_job.location
+            assert refreshed.is_remote is False
+            assert refreshed.description == updated_job.description
+            assert refreshed.provider_data == updated_job.provider_data
+            assert session.scalar(select(func.count()).select_from(Job)) == 1
     finally:
         engine.dispose()
 
