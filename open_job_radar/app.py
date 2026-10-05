@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from open_job_radar.config import get_database_url
 from open_job_radar.persistence import (
     JobRepository,
+    JobStatus,
     create_database_engine,
     create_session_factory,
 )
@@ -40,15 +41,35 @@ def create_app(
         return {"status": "ok"}
 
     @app.get("/jobs", response_class=HTMLResponse)
-    def jobs_page(request: Request) -> HTMLResponse:
+    def jobs_page(
+        request: Request,
+        status: str | None = Query(
+            default=None,
+            description="Show only jobs with this application status.",
+        ),
+    ) -> HTMLResponse:
+        status_filter = None
+        if status:
+            try:
+                status_filter = JobStatus(status)
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Unsupported job status filter: {status}.",
+                ) from error
+
         jobs = []
         if session_factory is not None:
             with session_factory() as session:
-                jobs = JobRepository(session).list_all()
+                jobs = JobRepository(session).list_all(status=status_filter)
         return templates.TemplateResponse(
             request=request,
             name="jobs.html",
-            context={"jobs": jobs},
+            context={
+                "jobs": jobs,
+                "statuses": JobStatus,
+                "status_filter": status_filter,
+            },
         )
 
     return app

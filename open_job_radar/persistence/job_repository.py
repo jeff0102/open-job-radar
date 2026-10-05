@@ -170,14 +170,13 @@ class JobRepository:
         self._session.refresh(job)
         return job
 
-    def list_all(self) -> list[Job]:
-        """Return all persisted jobs for read-only application views."""
+    def list_all(self, status: JobStatus | str | None = None) -> list[Job]:
+        """Return persisted jobs, optionally narrowed by application status."""
 
-        statement = (
-            select(Job)
-            .options(joinedload(Job.source_tenant))
-            .order_by(Job.created_at.desc(), Job.id)
-        )
+        statement = select(Job).options(joinedload(Job.source_tenant))
+        if status is not None:
+            statement = statement.where(Job.status == self._validate_status(status))
+        statement = statement.order_by(Job.created_at.desc(), Job.id)
         return list(self._session.scalars(statement).all())
 
     def get_by_id(self, job_id: UUID) -> Job | None:
