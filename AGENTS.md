@@ -88,7 +88,7 @@ The Supervisor:
 - evaluates the Executor's changes;
 - inspects test and validation results;
 - decides whether the work is accepted, requires revision, or is blocked;
-- reviews any runtime-managed conflict resolution and merged result before accepting;
+- reviews runtime-managed conflict resolution and the merged result before accepting;
 - must not modify project source code directly;
 - must reject unrelated changes or scope creep.
 
@@ -129,7 +129,7 @@ The expected loop is:
 6. If rejected, Supervisor gives concrete revision instructions limited to the task.
 7. Executor revises the implementation.
 8. Repeat until the Supervisor accepts the task.
-9. Runtime checkpoints accepted work and, only when remote publication is explicitly enabled, pushes the accepted session branch to the configured target.
+9. Runtime checkpoints the accepted work.
 10. Supervisor selects the next atomic task.
 11. Continue until the scope is complete or the Supervisor reports a blocking issue.
 
@@ -179,4 +179,3 @@ Examples of tasks that should normally be split:
 The repository is in the planning/bootstrap phase.
 
 The autonomous runtime must not implement the full product until `SCOPE.md` has been written and accepted by the human owner.
-
