@@ -88,6 +88,7 @@ The Supervisor:
 - evaluates the Executor's changes;
 - inspects test and validation results;
 - decides whether the work is accepted, requires revision, or is blocked;
+- reviews any runtime-managed conflict resolution and merged result before accepting;
 - must not modify project source code directly;
 - must reject unrelated changes or scope creep.
 
@@ -128,7 +129,7 @@ The expected loop is:
 6. If rejected, Supervisor gives concrete revision instructions limited to the task.
 7. Executor revises the implementation.
 8. Repeat until the Supervisor accepts the task.
-9. Runtime checkpoints the accepted work.
+9. Runtime checkpoints accepted work and, only when remote publication is explicitly enabled, pushes the accepted session branch to the configured target.
 10. Supervisor selects the next atomic task.
 11. Continue until the scope is complete or the Supervisor reports a blocking issue.
 
@@ -157,13 +158,14 @@ Examples of tasks that should normally be split:
 
 ## Git Workflow
 
-- Work on an isolated branch created by the runtime.
-- Do not rewrite public history.
-- Do not force-push.
-- The runtime controls commits and branch checkpoints.
-- The Executor should not merge branches or rewrite history.
-- Pushes to the remote repository must be explicitly enabled in the runtime configuration.
-- Prefer one logical checkpoint per accepted atomic increment.
+- Work on the isolated session branch created by the runtime. The Executor must not switch to the target branch, merge branches, push commits, or rewrite history.
+- The runtime owns Git synchronization, merge commits, checkpoints, and remote pushes.
+- Remote publication is disabled unless the runtime is explicitly started with `--enable-push`.
+- When remote publication is enabled, the runtime fetches the configured remote target branch and merges it into the isolated session branch before execution. If this produces conflicts, the Executor must resolve them in the working tree, preserve valid behavior from both sides, stage resolved paths with `git add`, and leave commit creation to the runtime.
+- After conflict resolution, the runtime runs deterministic validation and asks the Supervisor to review the merged result. The Supervisor must not accept while Git reports unresolved conflicts. Once accepted, the runtime finalizes the merge as part of the checkpoint commit.
+- After the Supervisor accepts and validation passes, the runtime checkpoints the work and pushes the session branch to the configured target with a normal fast-forward push.
+- If the remote target advances during a push, the runtime synchronizes the new target and repeats Executor resolution, validation, and Supervisor review before retrying.
+- Never rewrite public history or force-push. If authentication, branch protection, network failure, or an unresolved conflict prevents a safe push, preserve the local checkpoint and report the session as blocked.
 
 ## Data Safety
 
@@ -177,3 +179,4 @@ Examples of tasks that should normally be split:
 The repository is in the planning/bootstrap phase.
 
 The autonomous runtime must not implement the full product until `SCOPE.md` has been written and accepted by the human owner.
+
