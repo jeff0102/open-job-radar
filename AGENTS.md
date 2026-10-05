@@ -176,6 +176,6 @@ Examples of tasks that should normally be split:
 
 ## Current Project Status
 
-The repository is in the planning/bootstrap phase.
+Milestone 1 — Bootstrap is complete: the application package, FastAPI health endpoint, and test foundation are present, and the focused health test passes. The next planned milestone is Milestone 2 — Persistence.
 
-The autonomous runtime must not implement the full product until `SCOPE.md` has been written and accepted by the human owner.
+This is a progress marker, not a replacement for `SCOPE.md`. Before every new plan, the Supervisor must compare the milestone acceptance criteria with tracked and untracked files, recent Git history, completed tasks, and the current diff. A file that already exists in the repository does not need to reappear in the current task diff. Do not repeat accepted work; when completion evidence is uncertain, assign a focused verification or gap-analysis task before implementation.
