@@ -8,6 +8,8 @@ from open_job_radar.ingestion import CanonicalJob, SynchronizationService
 from open_job_radar.persistence import (
     Base,
     Job,
+    JobRepository,
+    JobStatus,
     SourceTenant,
     SyncRun,
     create_session_factory,
@@ -102,6 +104,72 @@ def test_synchronization_records_success_and_persists_jobs() -> None:
             assert sync_run.completed_at >= sync_run.started_at
             assert sync_run.message == "Synchronized 2 jobs."
             assert session.scalar(select(func.count()).select_from(Job)) == 2
+    finally:
+        engine.dispose()
+
+
+def test_synchronization_preserves_tracked_job_when_source_record_disappears() -> None:
+    engine, session_factory = make_session()
+    source_tenant_id = uuid4()
+
+    try:
+        with session_factory() as session:
+            add_source_tenant(session, source_tenant_id)
+            SynchronizationService(
+                session,
+                FixtureAdapter(source_tenant_id, records=(ProviderRecord("job-1"),)),
+                mapper=canonical_job,
+            ).synchronize()
+
+            job = session.scalar(select(Job))
+            assert job is not None
+            repository = JobRepository(session)
+            repository.update_status(job.id, JobStatus.APPLIED)
+            repository.update_notes(job.id, "Follow up after the interview.")
+
+            sync_run = SynchronizationService(
+                session,
+                FixtureAdapter(source_tenant_id, records=()),
+                mapper=canonical_job,
+            ).synchronize()
+
+            persisted = repository.get_by_id(job.id)
+            assert sync_run.status == "succeeded"
+            assert sync_run.message == "Synchronized 0 jobs."
+            assert persisted is not None
+            assert persisted.status == JobStatus.APPLIED
+            assert persisted.notes == "Follow up after the interview."
+            assert session.scalar(select(func.count()).select_from(Job)) == 1
+    finally:
+        engine.dispose()
+
+
+def test_synchronization_keeps_untracked_job_when_source_record_disappears() -> None:
+    engine, session_factory = make_session()
+    source_tenant_id = uuid4()
+
+    try:
+        with session_factory() as session:
+            add_source_tenant(session, source_tenant_id)
+            SynchronizationService(
+                session,
+                FixtureAdapter(source_tenant_id, records=(ProviderRecord("job-1"),)),
+                mapper=canonical_job,
+            ).synchronize()
+            job = session.scalar(select(Job))
+            assert job is not None
+
+            SynchronizationService(
+                session,
+                FixtureAdapter(source_tenant_id, records=()),
+                mapper=canonical_job,
+            ).synchronize()
+
+            persisted = JobRepository(session).get_by_id(job.id)
+            assert persisted is not None
+            assert persisted.status == JobStatus.NEW
+            assert persisted.notes is None
+            assert session.scalar(select(func.count()).select_from(Job)) == 1
     finally:
         engine.dispose()
 
