@@ -11,20 +11,30 @@ def test_source_tenant_repository_returns_persisted_tenant_by_id() -> None:
     Base.metadata.create_all(engine)
     session_factory = create_session_factory(engine)
     source_tenant_id = uuid4()
+    configuration = {"board_token": "example"}
 
     try:
         with session_factory() as session:
-            source_tenant = SourceTenant(
-                id=source_tenant_id,
-                provider="greenhouse",
-                name="Example Careers",
+            session.add(
+                SourceTenant(
+                    id=source_tenant_id,
+                    provider="greenhouse",
+                    name="Example Careers",
+                    configuration=configuration,
+                    enabled=False,
+                )
             )
-            session.add(source_tenant)
             session.commit()
 
+        with session_factory() as session:
             result = SourceTenantRepository(session).get_by_id(source_tenant_id)
 
-            assert result is source_tenant
+            assert result is not None
+            assert result.id == source_tenant_id
+            assert result.provider == "greenhouse"
+            assert result.name == "Example Careers"
+            assert result.configuration == configuration
+            assert result.enabled is False
     finally:
         engine.dispose()
 
