@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ job.title }} | Open Job Radar</title>
+  </head>
+  <body>
+    <main>
+      <p><a href="/jobs">Back to jobs</a></p>
+      <h1>{{ job.title }}</h1>
+      <p>Company: {{ job.company }}</p>
+      <p>Source: {{ job.source_tenant.name }}</p>
+      <p>Provider: {{ job.provider }}</p>
+      {% if job.provider_job_id %}
+        <p>Provider job ID: {{ job.provider_job_id }}</p>
+      {% endif %}
+      <p>
+        Location:
+        {% if job.location %}
+          {{ job.location }}
+        {% elif job.is_remote %}
+          Remote
+        {% else %}
+          Not specified
+        {% endif %}
+      </p>
+      <p>Remote: {{ "Yes" if job.is_remote else "No" if job.is_remote is not none else "Not specified" }}</p>
+      <p>Status: {{ job.status }}</p>
+      {% if job.description %}
+        <section>
+          <h2>Description</h2>
+          <p>{{ job.description }}</p>
+        </section>
+      {% endif %}
+      {% if score is not none or analysis %}
+        <section>
+          <h2>Analysis</h2>
+          {% if score is not none %}
+            <p>Score: {{ score }}</p>
+          {% endif %}
+          {% if analysis %}
+            <p>{{ analysis }}</p>
+          {% endif %}
+        </section>
+      {% endif %}
+      <section>
+        <h2>Links</h2>
+        <p><a href="{{ job.original_url }}">View original job</a></p>
+        {% if job.application_url %}
+          <p><a href="{{ job.application_url }}">Apply on the original site</a></p>
+        {% endif %}
+      </section>
+    </main>
+  </body>
+</html>

@@ -182,7 +182,11 @@ class JobRepository:
     def get_by_id(self, job_id: UUID) -> Job | None:
         """Return the job with the given ID, if it exists."""
 
-        return self._session.get(Job, job_id)
+        return self._session.scalar(
+            select(Job)
+            .options(joinedload(Job.source_tenant))
+            .where(Job.id == job_id)
+        )
 
     def get_status(self, job_id: UUID) -> JobStatus | None:
         """Return the application-tracking status for an existing job."""

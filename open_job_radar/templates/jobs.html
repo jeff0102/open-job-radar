@@ -24,7 +24,7 @@
         <ul>
           {% for job in jobs %}
             <li>
-              <h2>{{ job.title }}</h2>
+              <h2><a href="/jobs/{{ job.id }}">{{ job.title }}</a></h2>
               <p>Company: {{ job.company }}</p>
               <p>Source: {{ job.source_tenant.name }}</p>
               <p>

@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -69,6 +70,27 @@ def create_app(
                 "jobs": jobs,
                 "statuses": JobStatus,
                 "status_filter": status_filter,
+            },
+        )
+
+    @app.get("/jobs/{job_id}", response_class=HTMLResponse)
+    def job_details(request: Request, job_id: UUID) -> HTMLResponse:
+        job = None
+        if session_factory is not None:
+            with session_factory() as session:
+                job = JobRepository(session).get_by_id(job_id)
+
+        if job is None:
+            raise HTTPException(status_code=404, detail="Job not found.")
+
+        provider_data = job.provider_data if isinstance(job.provider_data, dict) else {}
+        return templates.TemplateResponse(
+            request=request,
+            name="job_details.html",
+            context={
+                "job": job,
+                "analysis": provider_data.get("analysis"),
+                "score": provider_data.get("score"),
             },
         )
 

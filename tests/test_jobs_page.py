@@ -63,6 +63,7 @@ def test_jobs_page_renders_persisted_job_details(tmp_path) -> None:
         assert "Acme Careers" in response.text
         assert "Remote - Americas" in response.text
         assert "https://boards.greenhouse.io/acme/jobs/12345" in response.text
+        assert f'href="/jobs/{job.id}"' in response.text
         assert "applied" in response.text
     finally:
         engine.dispose()
@@ -129,5 +130,71 @@ def test_jobs_page_renders_empty_state_for_empty_repository(tmp_path) -> None:
 
         assert response.status_code == 200
         assert "No jobs found." in response.text
+    finally:
+        engine.dispose()
+
+
+def test_job_details_page_renders_canonical_fields_and_original_urls(tmp_path) -> None:
+    engine = create_database_engine(f"sqlite+pysqlite:///{tmp_path / 'details.db'}")
+    Base.metadata.create_all(engine)
+    session_factory = create_session_factory(engine)
+    source_tenant_id = uuid4()
+
+    try:
+        with session_factory() as session:
+            session.add(
+                SourceTenant(
+                    id=source_tenant_id,
+                    provider="greenhouse",
+                    name="Acme Careers",
+                )
+            )
+            session.commit()
+            job = JobRepository(session).create(
+                CanonicalJob(
+                    source_tenant_id=source_tenant_id,
+                    provider="greenhouse",
+                    provider_job_id="12345",
+                    original_url="https://boards.greenhouse.io/acme/jobs/12345",
+                    application_url="https://acme.example/apply/12345",
+                    title="Senior Python Engineer",
+                    company="Acme",
+                    location="Remote - Americas",
+                    is_remote=True,
+                    description="Build reliable services.",
+                    provider_data={"score": 3, "analysis": "Strong remote match."},
+                )
+            )
+
+        response = TestClient(create_app(session_factory=session_factory)).get(
+            f"/jobs/{job.id}"
+        )
+
+        assert response.status_code == 200
+        assert "Senior Python Engineer" in response.text
+        assert "Acme" in response.text
+        assert "Acme Careers" in response.text
+        assert "Remote - Americas" in response.text
+        assert "Build reliable services." in response.text
+        assert "https://boards.greenhouse.io/acme/jobs/12345" in response.text
+        assert "https://acme.example/apply/12345" in response.text
+        assert "Score: 3" in response.text
+        assert "Strong remote match." in response.text
+    finally:
+        engine.dispose()
+
+
+def test_job_details_page_returns_not_found_for_unknown_job(tmp_path) -> None:
+    engine = create_database_engine(f"sqlite+pysqlite:///{tmp_path / 'missing-details.db'}")
+    Base.metadata.create_all(engine)
+    session_factory = create_session_factory(engine)
+
+    try:
+        response = TestClient(create_app(session_factory=session_factory)).get(
+            f"/jobs/{uuid4()}"
+        )
+
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Job not found."}
     finally:
         engine.dispose()
