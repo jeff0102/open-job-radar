@@ -1,10 +1,10 @@
 from fastapi.testclient import TestClient
 
-from open_job_radar.main import app
+from open_job_radar import create_app
 
 
-def test_health_endpoint_returns_ok() -> None:
-    client = TestClient(app)
+def test_health_endpoint_returns_ok_status() -> None:
+    client = TestClient(create_app())
 
     response = client.get("/health")
 
