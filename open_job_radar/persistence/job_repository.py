@@ -1,11 +1,12 @@
 """Repository operations for canonical jobs."""
 
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from open_job_radar.ingestion import CanonicalJob
+from open_job_radar.ingestion import CanonicalJob, job_identity_key
 
 from .models import Job, SourceTenant
 
@@ -15,6 +16,61 @@ class JobRepository:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    @staticmethod
+    def _source_record(canonical_job: CanonicalJob) -> dict[str, object]:
+        return {
+            "source_tenant_id": str(canonical_job.source_tenant_id),
+            "provider": canonical_job.provider,
+            "provider_job_id": canonical_job.provider_job_id,
+            "original_url": canonical_job.original_url,
+            "application_url": canonical_job.application_url,
+            "provider_data": canonical_job.provider_data,
+        }
+
+    @classmethod
+    def _merge_provider_data(
+        cls,
+        job: Job,
+        canonical_job: CanonicalJob,
+    ) -> dict[str, Any]:
+        existing_sources = job.provider_data.get("sources")
+        if not isinstance(existing_sources, list):
+            existing_sources = [
+                cls._source_record(
+                    CanonicalJob(
+                        source_tenant_id=job.source_tenant_id,
+                        provider=job.provider,
+                        provider_job_id=job.provider_job_id,
+                        original_url=job.original_url,
+                        application_url=job.application_url,
+                        title=job.title,
+                        company=job.company,
+                        location=job.location,
+                        provider_data=job.provider_data,
+                    )
+                )
+            ]
+
+        source_record = cls._source_record(canonical_job)
+        source_key = (
+            source_record["source_tenant_id"],
+            source_record["provider"],
+            source_record["provider_job_id"],
+        )
+        sources = [
+            record
+            for record in existing_sources
+            if not isinstance(record, dict)
+            or (
+                record.get("source_tenant_id"),
+                record.get("provider"),
+                record.get("provider_job_id"),
+            )
+            != source_key
+        ]
+        sources.append(source_record)
+        return {"sources": sources}
 
     def create(self, canonical_job: CanonicalJob) -> Job:
         """Persist one canonical job for an existing source tenant."""
@@ -29,6 +85,7 @@ class JobRepository:
             source_tenant=source_tenant,
             provider=canonical_job.provider,
             provider_job_id=canonical_job.provider_job_id,
+            identity_key=job_identity_key(canonical_job),
             original_url=canonical_job.original_url,
             application_url=canonical_job.application_url,
             title=canonical_job.title,
@@ -55,17 +112,24 @@ class JobRepository:
                 f"Source tenant {canonical_job.source_tenant_id} does not exist."
             )
 
+        identity_key = job_identity_key(canonical_job)
         job = self._session.scalar(
             select(Job).where(
                 Job.source_tenant_id == canonical_job.source_tenant_id,
                 Job.provider_job_id == canonical_job.provider_job_id,
             )
         )
+        matched_by_source = job is not None
+        if job is None:
+            job = self._session.scalar(
+                select(Job).where(Job.identity_key == identity_key)
+            )
         if job is None:
             job = Job(
                 source_tenant=source_tenant,
                 provider=canonical_job.provider,
                 provider_job_id=canonical_job.provider_job_id,
+                identity_key=identity_key,
                 original_url=canonical_job.original_url,
                 application_url=canonical_job.application_url,
                 title=canonical_job.title,
@@ -77,14 +141,20 @@ class JobRepository:
             )
             self._session.add(job)
         else:
-            job.original_url = canonical_job.original_url
-            job.application_url = canonical_job.application_url
-            job.title = canonical_job.title
-            job.company = canonical_job.company
-            job.location = canonical_job.location
-            job.is_remote = canonical_job.is_remote
-            job.description = canonical_job.description
-            job.provider_data = canonical_job.provider_data
+            if matched_by_source:
+                job.original_url = canonical_job.original_url
+                job.application_url = canonical_job.application_url
+                job.title = canonical_job.title
+                job.company = canonical_job.company
+                job.location = canonical_job.location
+                job.is_remote = canonical_job.is_remote
+                job.description = canonical_job.description
+                if isinstance(job.provider_data.get("sources"), list):
+                    job.provider_data = self._merge_provider_data(job, canonical_job)
+                else:
+                    job.provider_data = canonical_job.provider_data
+            else:
+                job.provider_data = self._merge_provider_data(job, canonical_job)
 
         self._session.commit()
         self._session.refresh(job)

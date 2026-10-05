@@ -55,6 +55,7 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
             "source_tenant_id",
             "provider",
             "provider_job_id",
+            "identity_key",
             "original_url",
             "application_url",
             "title",

@@ -49,6 +49,7 @@ class Job(Base):
     )
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     provider_job_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    identity_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
     original_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     application_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

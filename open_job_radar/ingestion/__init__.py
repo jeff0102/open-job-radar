@@ -1,6 +1,6 @@
 """Ingestion contracts, canonical mapping, and provider adapters."""
 
-from .canonical_job import CanonicalJob
+from .canonical_job import CanonicalJob, job_identity_key
 from .greenhouse_adapter import GreenhouseSourceTenantAdapter
 from .job_mapping import normalize_job
 from .lever_adapter import LeverSourceTenantAdapter

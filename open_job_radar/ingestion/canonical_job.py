@@ -1,6 +1,7 @@
 """Provider-independent canonical job representation."""
 
 from dataclasses import dataclass, field
+from hashlib import sha256
 from uuid import UUID
 
 
@@ -35,4 +36,18 @@ class CanonicalJob:
             raise ValueError("provider_data must be a dictionary")
 
 
-__all__ = ["CanonicalJob"]
+def job_identity_key(canonical_job: CanonicalJob) -> str:
+    """Return a deterministic cross-provider identity for a canonical job."""
+
+    components = (
+        canonical_job.title,
+        canonical_job.company,
+        canonical_job.location or "",
+    )
+    normalized = "\x1f".join(
+        " ".join(component.casefold().split()) for component in components
+    )
+    return sha256(normalized.encode("utf-8")).hexdigest()
+
+
+__all__ = ["CanonicalJob", "job_identity_key"]
