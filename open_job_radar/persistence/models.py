@@ -84,6 +84,7 @@ class Job(Base):
         default=JobStatus.NEW,
         server_default=JobStatus.NEW.value,
     )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     original_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     application_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

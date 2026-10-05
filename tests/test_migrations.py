@@ -62,6 +62,7 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
             "title",
             "company",
             "location",
+            "notes",
             "is_remote",
             "description",
             "provider_data",
@@ -73,6 +74,7 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
         }
         assert job_column_details["status"]["nullable"] is False
         assert job_column_details["status"]["default"] == "'new'"
+        assert job_column_details["notes"]["nullable"] is True
         assert {
             constraint["name"] for constraint in inspector.get_check_constraints("jobs")
         } == {"ck_jobs_status"}

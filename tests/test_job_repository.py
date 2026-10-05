@@ -48,10 +48,25 @@ def test_job_repository_persists_and_retrieves_canonical_job() -> None:
             persisted = repository.create(canonical_job)
             persisted_id = persisted.id
             assert persisted.status == JobStatus.NEW
+            assert repository.get_notes(persisted_id) is None
 
             updated = repository.update_status(persisted_id, JobStatus.APPLIED)
             assert updated.status == JobStatus.APPLIED
             assert repository.get_status(persisted_id) == JobStatus.APPLIED
+
+            first_notes = repository.update_notes(
+                persisted_id, "Prepare questions about the service architecture."
+            )
+            assert first_notes.notes == "Prepare questions about the service architecture."
+            updated_notes = repository.update_notes(
+                persisted_id, "Ask about the service architecture and team structure."
+            )
+            assert updated_notes.notes == (
+                "Ask about the service architecture and team structure."
+            )
+            assert repository.get_notes(persisted_id) == (
+                "Ask about the service architecture and team structure."
+            )
 
             with pytest.raises(ValueError, match="Invalid job status"):
                 repository.update_status(persisted_id, "not-a-status")
@@ -73,7 +88,13 @@ def test_job_repository_persists_and_retrieves_canonical_job() -> None:
             assert result.description == canonical_job.description
             assert result.provider_data == canonical_job.provider_data
             assert result.status == JobStatus.APPLIED
+            assert result.notes == (
+                "Ask about the service architecture and team structure."
+            )
             assert JobRepository(session).get_status(persisted_id) == JobStatus.APPLIED
+            assert JobRepository(session).get_notes(persisted_id) == (
+                "Ask about the service architecture and team structure."
+            )
     finally:
         engine.dispose()
 

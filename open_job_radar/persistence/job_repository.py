@@ -192,3 +192,21 @@ class JobRepository:
         self._session.commit()
         self._session.refresh(job)
         return job
+
+    def get_notes(self, job_id: UUID) -> str | None:
+        """Return application notes for an existing job."""
+
+        job = self.get_by_id(job_id)
+        return None if job is None else job.notes
+
+    def update_notes(self, job_id: UUID, notes: str | None) -> Job:
+        """Set and persist application notes for an existing job."""
+
+        job = self.get_by_id(job_id)
+        if job is None:
+            raise ValueError(f"Job {job_id} does not exist.")
+
+        job.notes = notes
+        self._session.commit()
+        self._session.refresh(job)
+        return job
