@@ -52,6 +52,22 @@ class MatchingSignal:
     reason: str
 
 
+DEFAULT_SCORING_VERSION = "v1"
+
+
+@dataclass(frozen=True)
+class CandidateScore:
+    """Explainable deterministic score for a candidate-job pair."""
+
+    scoring_version: str
+    eligible: bool
+    score: int
+    remote_scope: RemoteScope
+    hard_filter: HardFilterResult
+    signals: tuple[MatchingSignal, ...]
+    explanations: tuple[str, ...]
+
+
 class _CanonicalJobFields(Protocol):
     location: str | None
     is_remote: bool | None
@@ -304,6 +320,42 @@ def evaluate_matching_signals(
     return tuple(signals)
 
 
+def evaluate_candidate_score(
+    candidate: CandidateProfile,
+    job: _CanonicalJobFields,
+    *,
+    scoring_version: str = DEFAULT_SCORING_VERSION,
+) -> CandidateScore:
+    """Return a versioned score while keeping eligibility separate from ranking."""
+
+    if not scoring_version.strip():
+        raise ValueError("scoring_version must not be blank")
+
+    hard_filter = evaluate_hard_filters(candidate, job)
+    if not hard_filter.passed:
+        return CandidateScore(
+            scoring_version=scoring_version,
+            eligible=False,
+            score=0,
+            remote_scope=hard_filter.remote_scope,
+            hard_filter=hard_filter,
+            signals=(),
+            explanations=(hard_filter.reason,),
+        )
+
+    signals = evaluate_matching_signals(candidate, job)
+    explanations = tuple(f"{signal.name}: {signal.reason}" for signal in signals)
+    return CandidateScore(
+        scoring_version=scoring_version,
+        eligible=True,
+        score=len(signals),
+        remote_scope=hard_filter.remote_scope,
+        hard_filter=hard_filter,
+        signals=signals,
+        explanations=explanations,
+    )
+
+
 def _geography_matches(candidate: CandidateProfile, remote_scope: RemoteScope) -> bool:
     if remote_scope is RemoteScope.WORLDWIDE:
         return True
@@ -387,10 +439,13 @@ def _classify_geography(text: str, location: str) -> RemoteScope | None:
 
 __all__ = [
     "CandidateProfile",
+    "CandidateScore",
+    "DEFAULT_SCORING_VERSION",
     "HardFilterResult",
     "MatchingSignal",
     "RemoteScope",
     "classify_remote_scope",
+    "evaluate_candidate_score",
     "evaluate_hard_filters",
     "evaluate_matching_signals",
 ]

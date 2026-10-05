@@ -6,6 +6,7 @@ from open_job_radar.analysis import (
     CandidateProfile,
     RemoteScope,
     classify_remote_scope,
+    evaluate_candidate_score,
     evaluate_hard_filters,
     evaluate_matching_signals,
 )
@@ -189,3 +190,57 @@ def test_matching_signals_respect_conflicting_onsite_evidence() -> None:
     )
 
     assert signals == ()
+
+
+def test_candidate_score_combines_positive_signals_with_version_and_explanations() -> None:
+    result = evaluate_candidate_score(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"})),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert result.scoring_version == "v1"
+    assert result.eligible is True
+    assert result.remote_scope is RemoteScope.BRAZIL
+    assert result.score == 3
+    assert [signal.name for signal in result.signals] == [
+        "remote_preference",
+        "geography",
+        "authorization",
+    ]
+    assert all(signal.name in explanation for signal, explanation in zip(result.signals, result.explanations))
+    assert all(signal.reason in result.explanations[index] for index, signal in enumerate(result.signals))
+
+
+def test_candidate_score_is_the_number_of_positive_matching_signals() -> None:
+    result = evaluate_candidate_score(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"}), remote_only=False),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert result.eligible is True
+    assert result.score == len(result.signals) == 2
+    assert [signal.name for signal in result.signals] == ["geography", "authorization"]
+
+
+def test_candidate_score_rejects_before_applying_positive_signals() -> None:
+    result = evaluate_candidate_score(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"EU"})),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert result.scoring_version == "v1"
+    assert result.eligible is False
+    assert result.score == 0
+    assert result.signals == ()
+    assert result.explanations == (result.hard_filter.reason,)
+
+
+def test_candidate_score_preserves_specific_remote_scope() -> None:
+    result = evaluate_candidate_score(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"LATAM"})),
+        job(location="Remote - LATAM", is_remote=True),
+    )
+
+    assert result.eligible is True
+    assert result.remote_scope is RemoteScope.LATAM
+    assert "latam" in result.explanations[0]
