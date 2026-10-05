@@ -10,6 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "fastapi>=0.115,<1.0",
+  "jinja2>=3.1,<4.0",
   "uvicorn>=0.30,<1.0",
   "sqlalchemy>=2.0,<3.0",
   "alembic>=1.13,<2.0",
@@ -25,6 +26,9 @@ test = [
 
 [tool.setuptools]
 packages = ["open_job_radar", "open_job_radar.persistence", "open_job_radar.ingestion"]
+
+[tool.setuptools.package-data]
+open_job_radar = ["templates/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

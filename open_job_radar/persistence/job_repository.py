@@ -4,7 +4,7 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from open_job_radar.ingestion import CanonicalJob, job_identity_key
 
@@ -169,6 +169,16 @@ class JobRepository:
         self._session.commit()
         self._session.refresh(job)
         return job
+
+    def list_all(self) -> list[Job]:
+        """Return all persisted jobs for read-only application views."""
+
+        statement = (
+            select(Job)
+            .options(joinedload(Job.source_tenant))
+            .order_by(Job.created_at.desc(), Job.id)
+        )
+        return list(self._session.scalars(statement).all())
 
     def get_by_id(self, job_id: UUID) -> Job | None:
         """Return the job with the given ID, if it exists."""

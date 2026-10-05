@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jobs | Open Job Radar</title>
+  </head>
+  <body>
+    <main>
+      <h1>Jobs</h1>
+      {% if jobs %}
+        <ul>
+          {% for job in jobs %}
+            <li>
+              <h2>{{ job.title }}</h2>
+              <p>Company: {{ job.company }}</p>
+              <p>Source: {{ job.source_tenant.name }}</p>
+              <p>
+                Location:
+                {% if job.location %}
+                  {{ job.location }}
+                {% elif job.is_remote %}
+                  Remote
+                {% else %}
+                  Not specified
+                {% endif %}
+              </p>
+              <p>Status: {{ job.status }}</p>
+              <a href="{{ job.original_url }}">View original job</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p>No jobs found.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>
