@@ -184,6 +184,109 @@ def test_job_details_page_renders_canonical_fields_and_original_urls(tmp_path) -
         engine.dispose()
 
 
+def test_job_details_page_renders_persisted_score_and_contributing_signals(tmp_path) -> None:
+    engine = create_database_engine(f"sqlite+pysqlite:///{tmp_path / 'explained-details.db'}")
+    Base.metadata.create_all(engine)
+    session_factory = create_session_factory(engine)
+    source_tenant_id = uuid4()
+
+    try:
+        with session_factory() as session:
+            session.add(
+                SourceTenant(
+                    id=source_tenant_id,
+                    provider="greenhouse",
+                    name="Acme Careers",
+                )
+            )
+            session.commit()
+            job = JobRepository(session).create(
+                CanonicalJob(
+                    source_tenant_id=source_tenant_id,
+                    provider="greenhouse",
+                    provider_job_id="12345",
+                    original_url="https://boards.greenhouse.io/acme/jobs/12345",
+                    title="Senior Python Engineer",
+                    company="Acme",
+                    location="Remote - Brazil",
+                    is_remote=True,
+                    provider_data={
+                        "analysis": {
+                            "scoring_version": "v1",
+                            "eligible": True,
+                            "score": 3,
+                            "signals": [
+                                {
+                                    "name": "remote_preference",
+                                    "reason": "job has a brazil remote scope matching the candidate's remote-only preference",
+                                },
+                                {
+                                    "name": "geography",
+                                    "reason": "job scope brazil includes candidate country Brazil",
+                                },
+                                {
+                                    "name": "authorization",
+                                    "reason": "candidate authorization covers the job's brazil scope",
+                                },
+                            ],
+                        }
+                    },
+                )
+            )
+
+        response = TestClient(create_app(session_factory=session_factory)).get(
+            f"/jobs/{job.id}"
+        )
+
+        assert response.status_code == 200
+        assert "Score: 3" in response.text
+        assert "Contributing signals" in response.text
+        assert "remote_preference: job has a brazil remote scope" in response.text
+        assert "geography: job scope brazil includes candidate country Brazil" in response.text
+        assert "authorization: candidate authorization covers the job" in response.text
+    finally:
+        engine.dispose()
+
+
+def test_job_details_page_renders_without_score_explanation(tmp_path) -> None:
+    engine = create_database_engine(f"sqlite+pysqlite:///{tmp_path / 'unexplained-details.db'}")
+    Base.metadata.create_all(engine)
+    session_factory = create_session_factory(engine)
+    source_tenant_id = uuid4()
+
+    try:
+        with session_factory() as session:
+            session.add(
+                SourceTenant(
+                    id=source_tenant_id,
+                    provider="greenhouse",
+                    name="Acme Careers",
+                )
+            )
+            session.commit()
+            job = JobRepository(session).create(
+                CanonicalJob(
+                    source_tenant_id=source_tenant_id,
+                    provider="greenhouse",
+                    provider_job_id="67890",
+                    original_url="https://boards.greenhouse.io/acme/jobs/67890",
+                    title="Product Designer",
+                    company="Acme",
+                )
+            )
+
+        response = TestClient(create_app(session_factory=session_factory)).get(
+            f"/jobs/{job.id}"
+        )
+
+        assert response.status_code == 200
+        assert "Product Designer" in response.text
+        assert "Analysis" not in response.text
+        assert "Contributing signals" not in response.text
+    finally:
+        engine.dispose()
+
+
 def test_job_details_page_returns_not_found_for_unknown_job(tmp_path) -> None:
     engine = create_database_engine(f"sqlite+pysqlite:///{tmp_path / 'missing-details.db'}")
     Base.metadata.create_all(engine)

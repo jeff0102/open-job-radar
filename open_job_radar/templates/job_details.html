@@ -33,14 +33,19 @@
           <p>{{ job.description }}</p>
         </section>
       {% endif %}
-      {% if score is not none or analysis %}
+      {% if analysis.score is not none or analysis.explanations %}
         <section>
           <h2>Analysis</h2>
-          {% if score is not none %}
-            <p>Score: {{ score }}</p>
+          {% if analysis.score is not none %}
+            <p>Score: {{ analysis.score }}</p>
           {% endif %}
-          {% if analysis %}
-            <p>{{ analysis }}</p>
+          {% if analysis.explanations %}
+            <h3>Contributing signals</h3>
+            <ul>
+              {% for explanation in analysis.explanations %}
+                <li>{{ explanation }}</li>
+              {% endfor %}
+            </ul>
           {% endif %}
         </section>
       {% endif %}
