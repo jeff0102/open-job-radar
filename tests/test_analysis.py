@@ -7,6 +7,7 @@ from open_job_radar.analysis import (
     RemoteScope,
     classify_remote_scope,
     evaluate_hard_filters,
+    evaluate_matching_signals,
 )
 from open_job_radar.ingestion import CanonicalJob
 
@@ -137,3 +138,54 @@ def test_hard_filter_rejects_onsite_job_for_remote_only_candidate() -> None:
     assert result.passed is False
     assert result.remote_scope is RemoteScope.ONSITE
     assert "requires remote work" in result.reason
+
+
+def test_matching_signals_explain_each_positive_match() -> None:
+    signals = evaluate_matching_signals(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"})),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert [signal.name for signal in signals] == [
+        "remote_preference",
+        "geography",
+        "authorization",
+    ]
+    assert all(signal.reason for signal in signals)
+    assert "brazil" in signals[0].reason
+    assert "candidate country Brazil" in signals[1].reason
+    assert "authorization" in signals[2].reason
+
+
+def test_matching_signals_omit_non_matching_profile_evidence() -> None:
+    signals = evaluate_matching_signals(
+        CandidateProfile(country="United States", remote_only=False),
+        job(location="Remote - Brazil", is_remote=True),
+    )
+
+    assert signals == ()
+
+
+def test_matching_signals_omit_evidence_for_missing_scope_data() -> None:
+    signals = evaluate_matching_signals(
+        CandidateProfile(
+            country="Brazil",
+            authorized_regions=frozenset({"worldwide"}),
+        ),
+        job(location="Remote", is_remote=True),
+    )
+
+    assert signals == ()
+
+
+def test_matching_signals_respect_conflicting_onsite_evidence() -> None:
+    signals = evaluate_matching_signals(
+        CandidateProfile(country="Brazil", authorized_regions=frozenset({"Brazil"})),
+        job(
+            location="Brazil",
+            is_remote=False,
+            description="Hybrid schedule with remote flexibility",
+        ),
+    )
+
+    assert signals == ()

@@ -44,6 +44,14 @@ class HardFilterResult:
     remote_scope: RemoteScope
 
 
+@dataclass(frozen=True)
+class MatchingSignal:
+    """One positive, explainable match between a candidate and a job."""
+
+    name: str
+    reason: str
+
+
 class _CanonicalJobFields(Protocol):
     location: str | None
     is_remote: bool | None
@@ -234,6 +242,68 @@ def evaluate_hard_filters(candidate: CandidateProfile, job: _CanonicalJobFields)
     )
 
 
+def evaluate_matching_signals(
+    candidate: CandidateProfile,
+    job: _CanonicalJobFields,
+) -> tuple[MatchingSignal, ...]:
+    """Return positive candidate-job matches in a stable, explainable order.
+
+    This function reports evidence only; it does not decide eligibility or
+    invoke the hard-filter evaluation. Callers should apply hard filters
+    separately before using these signals for an eligible job.
+    """
+
+    remote_scope = classify_remote_scope(job)
+    signals: list[MatchingSignal] = []
+
+    if candidate.remote_only and remote_scope not in {
+        RemoteScope.UNKNOWN,
+        RemoteScope.ONSITE,
+        RemoteScope.HYBRID,
+    }:
+        signals.append(
+            MatchingSignal(
+                name="remote_preference",
+                reason=(
+                    f"job has a {remote_scope.value} remote scope matching "
+                    "the candidate's remote-only preference"
+                ),
+            )
+        )
+
+    if _geography_matches(candidate, remote_scope):
+        country = candidate.country or "the candidate"
+        signals.append(
+            MatchingSignal(
+                name="geography",
+                reason=(
+                    f"job scope {remote_scope.value} includes candidate country "
+                    f"{country}"
+                ),
+            )
+        )
+
+    geographic_scopes = {
+        RemoteScope.BRAZIL,
+        RemoteScope.LATAM,
+        RemoteScope.AMERICAS,
+        RemoteScope.WORLDWIDE,
+        RemoteScope.US_ONLY,
+        RemoteScope.EU_ONLY,
+    }
+    if remote_scope in geographic_scopes and _authorization_covers(candidate, remote_scope):
+        signals.append(
+            MatchingSignal(
+                name="authorization",
+                reason=(
+                    f"candidate authorization covers the job's {remote_scope.value} scope"
+                ),
+            )
+        )
+
+    return tuple(signals)
+
+
 def _geography_matches(candidate: CandidateProfile, remote_scope: RemoteScope) -> bool:
     if remote_scope is RemoteScope.WORLDWIDE:
         return True
@@ -318,7 +388,9 @@ def _classify_geography(text: str, location: str) -> RemoteScope | None:
 __all__ = [
     "CandidateProfile",
     "HardFilterResult",
+    "MatchingSignal",
     "RemoteScope",
     "classify_remote_scope",
     "evaluate_hard_filters",
+    "evaluate_matching_signals",
 ]
