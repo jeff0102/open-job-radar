@@ -8,6 +8,7 @@ from open_job_radar.persistence import (
     Base,
     Job,
     JobRepository,
+    JobStatus,
     SourceTenant,
     create_session_factory,
 )
@@ -43,8 +44,17 @@ def test_job_repository_persists_and_retrieves_canonical_job() -> None:
             )
             session.commit()
 
-            persisted = JobRepository(session).create(canonical_job)
+            repository = JobRepository(session)
+            persisted = repository.create(canonical_job)
             persisted_id = persisted.id
+            assert persisted.status == JobStatus.NEW
+
+            updated = repository.update_status(persisted_id, JobStatus.APPLIED)
+            assert updated.status == JobStatus.APPLIED
+            assert repository.get_status(persisted_id) == JobStatus.APPLIED
+
+            with pytest.raises(ValueError, match="Invalid job status"):
+                repository.update_status(persisted_id, "not-a-status")
 
         with session_factory() as session:
             result = JobRepository(session).get_by_id(persisted_id)
@@ -62,6 +72,8 @@ def test_job_repository_persists_and_retrieves_canonical_job() -> None:
             assert result.is_remote is True
             assert result.description == canonical_job.description
             assert result.provider_data == canonical_job.provider_data
+            assert result.status == JobStatus.APPLIED
+            assert JobRepository(session).get_status(persisted_id) == JobStatus.APPLIED
     finally:
         engine.dispose()
 

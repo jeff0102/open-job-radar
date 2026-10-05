@@ -56,6 +56,7 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
             "provider",
             "provider_job_id",
             "identity_key",
+            "status",
             "original_url",
             "application_url",
             "title",
@@ -67,6 +68,14 @@ def test_source_tenant_migration_upgrades_and_downgrades_empty_database(
             "created_at",
             "updated_at",
         }
+        job_column_details = {
+            column["name"]: column for column in inspector.get_columns("jobs")
+        }
+        assert job_column_details["status"]["nullable"] is False
+        assert job_column_details["status"]["default"] == "'new'"
+        assert {
+            constraint["name"] for constraint in inspector.get_check_constraints("jobs")
+        } == {"ck_jobs_status"}
         sync_run_columns = {
             column["name"]: column
             for column in inspector.get_columns("sync_runs")

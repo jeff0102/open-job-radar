@@ -1,15 +1,37 @@
 """SQLAlchemy persistence models."""
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    Uuid,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     """Base class for SQLAlchemy models."""
+
+
+class JobStatus(StrEnum):
+    """Application-tracking statuses supported for canonical jobs."""
+
+    NEW = "new"
+    SAVED = "saved"
+    APPLIED = "applied"
+    INTERVIEW = "interview"
+    OFFER = "offer"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
 
 
 def _utc_now() -> datetime:
@@ -42,6 +64,12 @@ class Job(Base):
     """A canonical job fetched from a source tenant."""
 
     __tablename__ = "jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('new', 'saved', 'applied', 'interview', 'offer', 'rejected', 'withdrawn')",
+            name="ck_jobs_status",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     source_tenant_id: Mapped[UUID] = mapped_column(
@@ -50,6 +78,12 @@ class Job(Base):
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     provider_job_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     identity_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    status: Mapped[JobStatus] = mapped_column(
+        String(32),
+        nullable=False,
+        default=JobStatus.NEW,
+        server_default=JobStatus.NEW.value,
+    )
     original_url: Mapped[str] = mapped_column(String(2048), nullable=False)
     application_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     title: Mapped[str] = mapped_column(String(255), nullable=False)

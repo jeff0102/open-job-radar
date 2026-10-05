@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from open_job_radar.ingestion import CanonicalJob, job_identity_key
 
-from .models import Job, SourceTenant
+from .models import Job, JobStatus, SourceTenant
 
 
 class JobRepository:
@@ -16,6 +16,16 @@ class JobRepository:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+
+    @staticmethod
+    def _validate_status(status: JobStatus | str) -> JobStatus:
+        try:
+            return JobStatus(status)
+        except (TypeError, ValueError) as error:
+            supported = ", ".join(item.value for item in JobStatus)
+            raise ValueError(
+                f"Invalid job status {status!r}; expected one of: {supported}."
+            ) from error
 
     @staticmethod
     def _source_record(canonical_job: CanonicalJob) -> dict[str, object]:
@@ -164,3 +174,21 @@ class JobRepository:
         """Return the job with the given ID, if it exists."""
 
         return self._session.get(Job, job_id)
+
+    def get_status(self, job_id: UUID) -> JobStatus | None:
+        """Return the application-tracking status for an existing job."""
+
+        job = self.get_by_id(job_id)
+        return None if job is None else JobStatus(job.status)
+
+    def update_status(self, job_id: UUID, status: JobStatus | str) -> Job:
+        """Set and persist a validated application-tracking status."""
+
+        job = self.get_by_id(job_id)
+        if job is None:
+            raise ValueError(f"Job {job_id} does not exist.")
+
+        job.status = self._validate_status(status)
+        self._session.commit()
+        self._session.refresh(job)
+        return job
