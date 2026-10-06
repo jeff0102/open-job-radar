@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -20,6 +21,29 @@ def test_database_engine_uses_configured_database_url(monkeypatch) -> None:
         assert engine.url.database == ":memory:"
     finally:
         engine.dispose()
+
+
+def test_database_engine_accepts_neon_postgresql_configuration(monkeypatch) -> None:
+    monkeypatch.setenv(
+        DATABASE_URL_ENVIRONMENT_VARIABLE,
+        "postgresql://db.example.neon.tech/jobs?sslmode=require",
+    )
+
+    engine = create_database_engine()
+
+    try:
+        assert engine.url.drivername == "postgresql"
+        assert engine.url.host == "db.example.neon.tech"
+        assert engine.url.query["sslmode"] == "require"
+    finally:
+        engine.dispose()
+
+
+def test_database_engine_requires_database_url(monkeypatch) -> None:
+    monkeypatch.delenv(DATABASE_URL_ENVIRONMENT_VARIABLE, raising=False)
+
+    with pytest.raises(RuntimeError, match="DATABASE_URL is not configured"):
+        create_database_engine()
 
 
 def test_session_factory_opens_a_local_sqlite_session() -> None:
