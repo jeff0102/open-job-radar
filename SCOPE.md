@@ -213,6 +213,10 @@ Add the project-owned Djinni adapter and integrate it into the ingestion contrac
 
 Prepare Neon and Heroku configuration, scheduled synchronization, logging, health checks, and operational safeguards.
 
+### Milestone 9 — Documentation and Quickstart Guide
+
+Document the complete local setup in `README.md`, including system requirements and dependencies, environment variables, Alembic migrations, creation of initial Greenhouse, Lever, and Djinni source tenants, scheduled synchronization, and startup of the FastAPI web server.
+
 ## Acceptance Criteria
 
 The project is complete only when:
@@ -225,6 +229,16 @@ The project is complete only when:
 - the web interface supports the intended personal workflow;
 - tests cover the critical business logic;
 - the application can run using the intended deployment stack.
+
+### Milestone 9 — Documentation and Quickstart Guide
+
+- [ ] `README.md` states the supported Python version and local dependency installation command, including `pip install -e .`.
+- [ ] `README.md` documents `DATABASE_URL` configuration for local SQLite and PostgreSQL/Neon.
+- [ ] `README.md` documents applying database migrations with `alembic upgrade head`.
+- [ ] `README.md` describes a reproducible command or script for creating the initial Greenhouse, Lever, and Djinni source tenants.
+- [ ] `README.md` documents manual or scheduled synchronization using `python -m open_job_radar.scheduled_sync` and explains how scheduled execution is configured.
+- [ ] `README.md` documents starting the FastAPI development server with `uvicorn open_job_radar.app:app --reload`.
+- [ ] The quickstart presents setup steps in an executable order and uses environment variable names and commands that match the implementation.
 
 ## Human Approval Boundary
 
