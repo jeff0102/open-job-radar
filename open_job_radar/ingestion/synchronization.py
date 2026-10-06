@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Generic, TypeVar
@@ -19,6 +20,8 @@ if TYPE_CHECKING:
 
 ProviderRecordT = TypeVar("ProviderRecordT")
 CanonicalMapper = Callable[[UUID, ProviderRecordT], CanonicalJob]
+
+logger = logging.getLogger(__name__)
 
 
 class SynchronizationService(Generic[ProviderRecordT]):
@@ -42,6 +45,14 @@ class SynchronizationService(Generic[ProviderRecordT]):
 
         sync_runs = SyncRunRepository(self._session)
         sync_run = sync_runs.create(self._adapter.source_tenant_id)
+        logger.info(
+            "Synchronization started",
+            extra={
+                "event": "synchronization_started",
+                "source_tenant_id": str(self._adapter.source_tenant_id),
+                "sync_run_id": str(sync_run.id),
+            },
+        )
         phase = "adapter fetch"
         persisted_count = 0
 
@@ -63,14 +74,35 @@ class SynchronizationService(Generic[ProviderRecordT]):
                     f"({type(error).__name__})."
                 ),
             )
+            logger.error(
+                "Synchronization failed",
+                extra={
+                    "event": "synchronization_failed",
+                    "source_tenant_id": str(self._adapter.source_tenant_id),
+                    "sync_run_id": str(sync_run.id),
+                    "phase": phase,
+                    "persisted_count": persisted_count,
+                    "error_type": type(error).__name__,
+                },
+            )
             raise
 
-        return sync_runs.update(
+        completed_sync_run = sync_runs.update(
             sync_run.id,
             status="succeeded",
             completed_at=datetime.now(UTC),
             message=f"Synchronized {persisted_count} jobs.",
         )
+        logger.info(
+            "Synchronization succeeded",
+            extra={
+                "event": "synchronization_succeeded",
+                "source_tenant_id": str(self._adapter.source_tenant_id),
+                "sync_run_id": str(sync_run.id),
+                "persisted_count": persisted_count,
+            },
+        )
+        return completed_sync_run
 
 
 __all__ = ["SynchronizationService"]

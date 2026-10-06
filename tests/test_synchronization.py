@@ -77,7 +77,8 @@ def add_source_tenant(session, source_tenant_id, provider="fixture"):
     session.commit()
 
 
-def test_synchronization_records_success_and_persists_jobs() -> None:
+def test_synchronization_records_success_and_persists_jobs(caplog) -> None:
+    caplog.set_level("INFO", logger="open_job_radar.ingestion.synchronization")
     engine, session_factory = make_session()
     source_tenant_id = uuid4()
 
@@ -104,6 +105,21 @@ def test_synchronization_records_success_and_persists_jobs() -> None:
             assert sync_run.completed_at >= sync_run.started_at
             assert sync_run.message == "Synchronized 2 jobs."
             assert session.scalar(select(func.count()).select_from(Job)) == 2
+
+            events = {
+                record.event: record
+                for record in caplog.records
+                if record.name == "open_job_radar.ingestion.synchronization"
+            }
+            assert events["synchronization_started"].source_tenant_id == str(
+                source_tenant_id
+            )
+            assert events["synchronization_started"].sync_run_id == str(sync_run.id)
+            assert events["synchronization_succeeded"].source_tenant_id == str(
+                source_tenant_id
+            )
+            assert events["synchronization_succeeded"].persisted_count == 2
+            assert events["synchronization_succeeded"].sync_run_id == str(sync_run.id)
     finally:
         engine.dispose()
 
@@ -174,7 +190,10 @@ def test_synchronization_keeps_untracked_job_when_source_record_disappears() -> 
         engine.dispose()
 
 
-def test_synchronization_records_one_failed_run_and_reraises_adapter_error() -> None:
+def test_synchronization_records_one_failed_run_and_reraises_adapter_error(
+    caplog,
+) -> None:
+    caplog.set_level("INFO", logger="open_job_radar.ingestion.synchronization")
     engine, session_factory = make_session()
     source_tenant_id = uuid4()
     provider_error = RuntimeError("request token=do-not-store")
@@ -205,6 +224,21 @@ def test_synchronization_records_one_failed_run_and_reraises_adapter_error() -> 
                 "Synchronization failed during adapter fetch (RuntimeError)."
             )
             assert "do-not-store" not in failed_run.message
+
+            failure_events = [
+                record
+                for record in caplog.records
+                if record.name == "open_job_radar.ingestion.synchronization"
+                and record.event == "synchronization_failed"
+            ]
+            assert len(failure_events) == 1
+            failure_event = failure_events[0]
+            assert failure_event.source_tenant_id == str(source_tenant_id)
+            assert failure_event.sync_run_id == str(failed_run.id)
+            assert failure_event.phase == "adapter fetch"
+            assert failure_event.persisted_count == 0
+            assert failure_event.error_type == "RuntimeError"
+            assert "do-not-store" not in failure_event.getMessage()
     finally:
         engine.dispose()
 
