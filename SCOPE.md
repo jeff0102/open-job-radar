@@ -179,6 +179,18 @@ Only for critical user flows and after the underlying modules are stable.
 
 External APIs must not be required for the normal test suite.
 
+## Blocking Local Setup Issue
+
+A local Windows setup installed the project with `pip install -e .`, but both `alembic upgrade head` and Uvicorn then failed with `ModuleNotFoundError: No module named 'bs4'` while importing `ats_scrapers.scrapers.herp`. The project dependency now declares `ats-scrapers[scrapers]>=0.3,<0.4`. Before beginning Milestone 2, the Executor must verify that the active runtime environment has installed this dependency.
+
+- From the repository root, install the project and test dependencies into the same Python environment used by the runtime with `python -m pip install -e ".[test]"`.
+- Confirm the Greenhouse scraper import with `python -c "from ats_scrapers.scrapers.greenhouse import GreenhouseScraper"`.
+- Set `DATABASE_URL=sqlite:///./open_job_radar.db` and confirm `python -m alembic upgrade head` completes.
+- Confirm `python -m pytest -q` passes and `python -c "from open_job_radar.app import app"` imports the web application.
+- Reuse an already active `.venv`; do not run `python -m venv .venv` over that environment. If a new environment is needed, deactivate the current one first or select a different path.
+
+The Supervisor must review these results as a setup-repair task before assigning the next milestone, then resume the planned milestone sequence.
+
 ## Milestones
 
 ### Milestone 1 — Bootstrap
